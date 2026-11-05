@@ -1,0 +1,15 @@
+{
+  "name": "claude-pr-reviewer",
+  "description": "Claude Code PR review skill: line-anchored, paste-ready comments, verified before they reach you.",
+  "owner": {
+    "name": "coderdeep11"
+  },
+  "plugins": [
+    {
+      "name": "pr-reviewer",
+      "source": "./plugins/pr-reviewer",
+      "description": "Senior-engineer PR review that writes paste-ready, line-anchored comments in plain English, verifies blockers with a second agent, and can post them to GitHub as one review.",
+      "category": "development"
+    }
+  ]
+}

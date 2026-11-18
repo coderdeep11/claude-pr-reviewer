@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Check the mechanical rules of a review file, without printing the anchors.
 #
-#   check-review.sh pr-reviews/<branch-key>.md <base>...<head> [-- <paths>]
+#   check-review.sh <comments-file> <base>...<head> [-- <paths>]
 #
 # Each inline header's path:line, and every line of a path:start-end range, must
 # be a line the diff added. Headers must be numbered from 1 in severity order.

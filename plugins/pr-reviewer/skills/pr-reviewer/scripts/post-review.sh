@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Post a review file to its PR as one COMMENT review.
 #
-#   post-review.sh pr-reviews/<branch-key>.md <pr> <base>...<head>
+#   post-review.sh <comments-file> <pr> <base>...<head>
 #
 # Re-runs check-review.sh, then stops unless the PR's head commit is <head>.
 # Inline blocks become line comments. General blocks become the review body, or

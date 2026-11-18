@@ -11,7 +11,10 @@ Review the current change as a senior engineer and produce **paste-ready review 
 
 ## Deliverable
 
-One file per run: `pr-reviews/<branch-key>.md`, rewritten each run. Every comment in it is anchored to the exact `file:line` where it should be posted, so the author can open the file and paste each block onto the matching diff line. Then a short summary in chat, and for a PR, an offer to post the comments (step 9).
+One comments file per run, rewritten each run. Every comment in it is anchored to the exact `file:line` where it goes, so each block can be pasted or posted onto the matching diff line. Where the file goes depends on the mode:
+
+- **Local mode (default):** `pr-reviews/<branch-key>.md` in the repo, then a short chat summary, and for a PR, an offer to post (step 9).
+- **Post mode:** when the request says to post the review (a cloud run, or "review and post"), write the file to a temporary folder outside the repo (the session scratchpad if there is one, else `${TMPDIR:-/tmp}/pr-reviewer/`) and post it in step 9 without asking. Nothing is written into the repo. Wherever this skill says to ask and no one can answer, stop, post nothing, and say why in the output.
 
 `<branch-key>` comes from the head ref: the branch name when filesystem-safe, otherwise with `/` and unsafe characters replaced by `__`. Do not write a deep-review report, an index, per-attempt files, or fingerprint bookkeeping. Just the one comments file.
 
@@ -27,7 +30,7 @@ One file per run: `pr-reviews/<branch-key>.md`, rewritten each run. Every commen
 
 ## Command discipline (read-only)
 
-A review reads code; it never mutates it. Do not stage, commit, push, fetch, checkout, reset, stash, or touch tracked files. Do not run mutating `gh` commands, except the step 9 post after the user says yes. Do not clean up untracked files, they are not yours. Run the PR's own test files (step 4b); do not run the full suite or linters unless the user asks, and never write or add tests. The **only** thing you write is `pr-reviews/<branch-key>.md`. Every subagent you start gets this rule in its prompt.
+A review reads code; it never mutates it. Do not stage, commit, push, fetch, checkout, reset, stash, or touch tracked files. Do not run mutating `gh` commands, except the step 9 post after the user says yes. Do not clean up untracked files, they are not yours. Run the PR's own test files (step 4b); do not run the full suite or linters unless the user asks, and never write or add tests. The **only** thing you write is the comments file. Every subagent you start gets this rule in its prompt.
 
 Run only commands whose flags you have verified work in this repo. If a ref is missing, say so and ask. Do not `git fetch` to "fix" it without permission.
 
@@ -37,9 +40,19 @@ Run only commands whose flags you have verified work in this repo. If a ref is m
 
 Run these in order. Steps 3 and 7 are what keep the output trustworthy; do not skip them.
 
-## 1. Resolve base and head
+## 1. Resolve what to review
 
-Prefer explicit user input (PR URL or number, branch, base, commit range). Otherwise resolve in order: explicit range, explicit base plus head, PR via `gh`, the current branch's PR, then infer base from upstream, `origin/HEAD`, `main`, `master`. If you cannot establish both ends, ask.
+Review exactly one of these:
+
+- a PR, by link or number;
+- the current branch, when it has an open PR (`gh pr view` with no argument finds it);
+- a branch, a base plus head, or a commit range the request names. A named branch with no base gets the repo's default branch (`origin/HEAD`, then `main`, then `master`).
+
+If the request names none of these and the current branch has no open PR, ask what to review. Never review whatever happens to be checked out.
+
+Only commits are reviewed. Uncommitted and untracked changes never are; if `git status --porcelain` shows any, say in the summary that they were left out.
+
+For a PR, the head is the PR's head commit (`headRefOid`) and the base is its `baseRefName`. If that commit is not in the local repo, or the local branch of the same name points elsewhere, stop before reading anything. Say which side is newer (unpushed local commits, or PR commits not fetched) and ask which to review.
 
 ```bash
 git branch --show-current
@@ -54,7 +67,7 @@ Always diff with `base...head` (the merge-base diff), so base commits made after
 With `gh` authed, pull the context a human reviewer would already have:
 
 ```bash
-gh pr view <pr> --json title,body,baseRefName,headRefName,commits,files,additions,deletions,isDraft,reviewDecision,url
+gh pr view <pr> --json title,body,baseRefName,headRefName,headRefOid,commits,files,additions,deletions,isDraft,reviewDecision,url
 gh pr checks <pr>                                    # CI state, do not infer it
 gh api "repos/<owner>/<repo>/pulls/<pr>/comments?per_page=100" \
   --jq '.[] | "\(.path):\(.line // .original_line) \(.user.login): \(.body)"'
@@ -66,14 +79,15 @@ gh pr view <pr> --json reviews,comments \
 - **Existing review comments:** read them before writing your own: the inline ones, review summaries and conversation comments. Do not restate a point a human already made; if you agree and have new evidence, reference theirs instead of duplicating it. `line` is `null` on outdated comments, hence the `original_line` fallback.
 - **CI:** if checks are failing, say which in the summary. Never claim tests pass beyond what `gh pr checks` reported and what step 4b ran.
 
-## 1b. Read the ticket
+## 1b. Work out what the change is for
 
-The ticket says what should be built; the PR body says what the author claims was built. Check both.
+Read the sources in this order: the PR description, the ticket, the commit messages, then the code. The description says what the author claims was built; the ticket says what should be built. Check both.
 
-- Take the key from the first `[A-Z][A-Z0-9]+-[0-9]+` match in the head branch name, then the PR title, then the commit messages.
+- Take the ticket key from the first `[A-Z][A-Z0-9]+-[0-9]+` match in the head branch name, then the PR title, then the commit messages.
 - Read it with the Atlassian MCP: `getJiraIssue` for the description and acceptance criteria, `listJiraIssueComments` for later decisions. `getAccessibleAtlassianResources` gives the `cloudId`.
 - List each requirement the ticket states; step 5 checks them.
 - If no key is found, or the tool fails or is not connected, say so under **Ticket** and scope from the PR alone.
+- With no description and no ticket, write **What this PR does** from the commits and the code you read, and mark it inferred.
 
 ## 2. Size and scope check
 
@@ -83,6 +97,7 @@ The ticket says what should be built; the PR body says what the author claims wa
 - Files that are not named, implied, or partners (CI or Docker infra on a feature PR, unrelated config rewrites, drive-by fixes) are **out of scope**.
 - Do not review out-of-scope files line by line. Roll them into **one** comment asking the author to split the PR, naming the files. Blocker if any carry obvious risk (committed secrets, infra or shared-service behavior change); otherwise major.
 - If more than ~30% of files or LOC are out of scope, stop and ask whether to review only the in-scope set.
+- With no description and no ticket there is little to compare against: flag only files that clearly do not belong to what the commits do.
 
 **Size.** Set the reading budget before you start, and report it honestly in Coverage:
 
@@ -167,14 +182,16 @@ Anchor a confirmed candidate on the added line that replaced the removed rule, o
 - **Authz and authn:** missing or changed permission check, trust-boundary shift, unauthenticated path, tenant escape.
 - **Data integrity:** non-atomic writes, partial updates, lost uniqueness, unsafe or irreversible migrations, destructive defaults.
 - **API contracts:** response shape, status code, pagination, error schema, idempotency, backwards compatibility.
+- **Values defined elsewhere:** a filter value, status, enum member, or constant the diff adds or changes. Find where that value is defined (enum, seed data, schema, the other side of an API) and confirm it exists there. A value that exists nowhere matches nothing and raises no error.
 - **Failure modes:** empty input, duplicate or concurrent request, partial outage, flag-off path.
 - **Error handling:** swallowed errors, retry storms, missing timeout, user-hostile failures.
 - **Performance:** N+1, unbounded query or loop, index-defeating predicate, large payload, synchronous slow path.
 - **Tests:** changed behavior with no coverage, tests asserting only implementation, missing edge, auth, or failure case.
 - **Refactor redundancy:** old and new paths both live, dead or shadowed code. Broken callers and dropped guards belong to step 4d.
 - **Leftovers:** debug statements (`console.log`, `puts`, `binding.pry`, `debugger`), commented-out code, an import, constant, param, or helper that nothing reads (whether the diff added it unused or orphaned it), `.only` / `fdescribe` / `xit` / skipped specs, a TODO with no ticket, flag scaffolding whose flag is now permanent, a factory or fixture nothing references. Before calling anything unused, grep the whole repo for it, not just the diff: a constant read from a view, a serializer, or a spec looks orphaned in the diff alone. `grep -rlw` is enough; you need the file list, not the lines.
+- **Stale comments:** a code comment the diff adds, or leaves beside changed code, that no longer describes what the code does.
 - **New callers of existing code:** when the diff calls an existing method, class, job or formatter in a new way, open it. Compare what the existing callers pass with what the new caller passes: arguments, allowed values, fields, record counts. A limit the old callers respect and the new one breaks is a finding, anchored on the new call.
-- **Reuse over reinvention:** a new service, controller, helper, serializer, job, or util that duplicates something the codebase already has. When the PR introduces a new building block, grep for an existing equivalent first; if one exists, point at it with `file:line`. Same for re-deriving a value an existing method, scope, or constant already exposes. Raise it only once you have confirmed the existing thing actually fits.
+- **Reuse over reinvention:** a new service, controller, helper, serializer, job, or util that duplicates something the codebase already has. When the PR introduces a new building block, grep for an existing equivalent first; if one exists, point at it with `file:line`. Same for re-deriving a value an existing method, scope, or constant already exposes, and for a new dependency in a manifest (`package.json`, `Gemfile`, and so on) that does what an installed one already does. Raise it only once you have confirmed the existing thing actually fits.
 - **Written-down conventions:** a change that breaks a rule the repo states (line length, component style, flag requirement, commit or branch format, comment style). Cite the rule's source.
 
 **Security pass.** Run this whenever the diff touches auth, sessions, tokens, credentials, SQL or raw queries, crypto, PII, payments, file paths or uploads, admin or impersonation, a public endpoint, CORS, or serializer output. Work the list, do not eyeball it:
@@ -237,7 +254,7 @@ Spot-check two citations from each verifier before acting on it. A finding resti
 
 **A critical security finding is a blocker and an interrupt.** Treat a CRITICAL finding (SQL injection, auth bypass, exposed credential) as stop-and-report, never something to carry on past quietly. In practice: give that one finding its own verifier first, because a false alarm here is expensive, then surface it in chat immediately and at the top of the summary, and write it as `blocker` number 1 in the file. Never let it wait in a file the author might not open until tomorrow. For a live credential in the diff, say so in chat before finishing the rest of the review: rotation is time-sensitive and is not something the author fixes by editing the branch.
 
-Recommend **request changes** if there is a blocker or a major worth fixing first; **approve with comments** if only minor, question, or nit remain; **approve** if nothing is actionable.
+Recommend **request changes** if there is a blocker or major; otherwise **approve**, and any minor, question, or nit comments are the author's call.
 
 ## 6. Write the comments
 
@@ -257,7 +274,7 @@ Recommend **request changes** if there is a blocker or a major worth fixing firs
 
 Mechanical, and cheap. Fix anything that fails before you report done:
 
-- [ ] `bash ${CLAUDE_SKILL_DIR}/scripts/check-review.sh pr-reviews/<branch-key>.md <base>...<head>` prints `ok`. It checks that every `inline` anchor, and every line of a range, is a line the diff added, that headers are numbered from 1 in severity order, and that no em dash is left.
+- [ ] `bash ${CLAUDE_SKILL_DIR}/scripts/check-review.sh <comments-file> <base>...<head>` prints `ok`. It checks that every `inline` anchor, and every line of a range, is a line the diff added, that headers are numbered from 1 in severity order, and that no em dash is left.
 - [ ] Every cited symbol is actually on that line in `git show <head>:<path>`.
 - [ ] Every `suggestion` block replaces exactly the line(s) its comment anchors to, at the same indentation.
 - [ ] Removed-behavior and caller audits ran (step 4d).
@@ -272,20 +289,20 @@ Mechanical, and cheap. Fix anything that fails before you report done:
 - [ ] **Tests run** names each command and its result, or why it could not run.
 - [ ] If a companion PR is named, **Companion PR** states what the contract check found.
 
-**Re-review of a branch:** read the existing `pr-reviews/<branch-key>.md` before overwriting it, and add one line under the recommendation saying which earlier comments are now resolved and which are still open. Comments already posted to the PR are existing review comments (step 1); do not write them again.
+**Re-review of a branch:** read the earlier comments first: the existing comments file in local mode, or your earlier review on the PR (step 1) in post mode. Add one line under the recommendation saying which earlier comments are now resolved and which are still open. Comments already posted to the PR are existing review comments (step 1); do not write them again.
 
-If `pr-reviews/` is not gitignored (`git check-ignore -v pr-reviews/`), mention that once in the summary so the file does not get committed by accident.
+In local mode, if `pr-reviews/` is not gitignored (`git check-ignore -v pr-reviews/`), mention that once in the summary so the file does not get committed by accident.
 
 ## 8. Output format
 
-**File, `pr-reviews/<branch-key>.md`:**
+**Comments file:**
 
 ```markdown
 # PR Review: <branch or PR title>
 
-**What this PR does:** <one or two sentences.>
+**What this PR does:** <one or two sentences; "(inferred)" when step 1b inferred it.>
 
-**Recommendation: <approve | approve with comments | request changes>.** <one line why.>
+**Recommendation: <approve | request changes>.** <one line why.>
 
 **Coverage:** read in full: <files>; skimmed: <files>; not opened: <files + why>.
 
@@ -322,24 +339,25 @@ If `pr-reviews/` is not gitignored (`git check-ignore -v pr-reviews/`), mention 
 
 1. Two or three lines: what the PR does plus your recommendation.
 2. The coverage line, including anything not opened, and the verification line. Surface skips here too, not only in the file.
-3. CI state, the result of the PR's own tests, draft status, and any assumption or missing context worth stating.
+3. CI state, the result of the PR's own tests, draft status, uncommitted changes left out, and any assumption or missing context worth stating.
 4. The priority-ordered comment headers (`[severity] file:line`). Bodies stay in the file.
 5. Any false claim in the PR body, and any ticket requirement that is missing or contradicted.
-6. The path to the saved file.
+6. The path to the comments file.
 
-## 9. Ask, then post
+## 9. Post
 
-If the review is of a PR and has at least one comment, end by asking: "Post <n> comments to #<pr>?" Use the question tool when one exists. A yes approves this one post; a later run asks again.
+Post only a PR review with at least one comment.
 
-On yes:
+- **Local mode:** ask "Post <n> comments to #<pr>?" Use the question tool when one exists. A yes approves this one post; a later run asks again. On no, stop; the file stays.
+- **Post mode:** post without asking.
 
 ```bash
-bash ${CLAUDE_SKILL_DIR}/scripts/post-review.sh pr-reviews/<branch-key>.md <pr> <base>...<head>
+bash ${CLAUDE_SKILL_DIR}/scripts/post-review.sh <comments-file> <pr> <base>...<head>
 ```
 
-- The script re-runs `check-review.sh`, since the user may have edited the file.
+- The script re-runs `check-review.sh`, since the file may have been edited.
 - It stops if the PR's head commit is not `<head>`, because anchors from another commit land on the wrong lines.
 - It posts one `COMMENT` review: `inline` blocks as line comments, `general` blocks as the review body, or the Recommendation line when there is no `general` block. Nothing else in the file is posted.
-- It never approves or requests changes; that stays the user's call on GitHub.
+- It never approves or requests changes, in either mode. The recommendation stays text in the review; the GitHub decision stays with a person.
 
-Report the review URL it prints. If it fails, report its output and do not post by hand. On no, stop; the file stays.
+Report the review URL it prints. If it fails, report its output and do not post by hand.

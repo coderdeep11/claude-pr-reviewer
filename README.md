@@ -154,12 +154,15 @@ flowchart TD
     C -- no --> D{"Current branch has an open PR?"}
     D -- yes --> P
     D -- no --> Q["Asks what to review"]
-    P --> E{"Local branch matches the PR?"}
+    P --> DR{"Ready for review?"}
+    DR -- "no: draft" --> DS["Post mode stops; local mode asks first"]
+    DR -- yes --> E{"Local branch matches the PR?"}
     E -- yes --> GO["Review"]
     E -- no --> S["Stops and says which side is newer"]
     R --> GO
 ```
 
+- **Ready PRs only.** A draft PR is skipped in post mode. Locally, it asks whether to review the draft anyway.
 - **Committed code only.** Uncommitted and untracked changes are never reviewed. The summary says when it left some out.
 - **A named branch with no base** is compared with the repo's default branch.
 - **No description and no ticket?** It works out what the PR does from the commits and the code, and marks that as inferred.
@@ -190,7 +193,7 @@ Any runner that starts Claude Code in a checkout of the repo works the same way:
 2. Log `gh` in with a token that can write pull request reviews. In GitHub Actions, pass it as `GH_TOKEN` and grant `pull-requests: write`.
 3. Ask for post mode in the prompt: `review and post PR #482`.
 
-A cloud run has no one to answer questions. If the review needs to ask something, such as which PR to review, it stops, posts nothing, and says why in the run output. If it finds nothing to comment on, it also posts nothing.
+A cloud run has no one to answer questions. If the review needs to ask something, such as which PR to review, it stops, posts nothing, and says why in the run output. It also posts nothing on a draft PR, or when it finds nothing to comment on.
 
 ### Example output
 
@@ -266,6 +269,7 @@ A few rules shape every review:
 - **Checks what the PR claims.** Every factual claim in the PR body, and every requirement in the linked ticket, is marked true, false, or unverifiable with a `file:line`.
 - **Looks past the added lines.** It checks what the diff removed (guards, validations, tenant filters, transactions) and greps for callers the change could break.
 - **Checks what the diff points at.** A new filter value or enum member must exist where it's defined. A comment must still match the code next to it. A new dependency must not do the same job as one already installed.
+- **Spots half-done work.** It follows the change end to end, from entry point to UI and tests. A missing piece in this repo is a `major` if the feature can't work without it, or a `question` if it may be planned for a later PR.
 - **Out-of-scope files get one comment.** Unrelated changes are rolled into a single "please split this PR" note instead of a line-by-line review.
 
 ### Severity
@@ -315,8 +319,11 @@ Your branch has commits you haven't pushed, or the PR has commits you haven't pu
 **`PR #482 head is <sha> but the review read <sha>; push or re-review first`**
 New commits landed after the review, so the line numbers may have moved. Ask for a re-review. It reads the earlier comments and notes which are now resolved.
 
+**It skipped a draft PR**
+Reviews run on PRs that are ready for review. Mark the PR ready, or, locally, say yes when it asks whether to review the draft.
+
 **A cloud run posted nothing**
-Either it found nothing to comment on, or it needed to ask something. The run output says which.
+The PR is a draft, it found nothing to comment on, or it needed to ask something. The run output says which.
 
 **`not a line this diff added: path:line`**
 A comment is anchored on an unchanged or deleted line. GitHub can't place it there. Move it to the nearest added line, or change it to `general`.

@@ -75,7 +75,7 @@ gh pr view <pr> --json reviews,comments \
   --jq '(.reviews[], .comments[]) | select(.body != "") | "\(.author.login): \(.body[0:300])"'
 ```
 
-- A **draft** PR gets the same review, but say it is a draft in the summary.
+- **Draft PRs:** review only a PR that is ready for review. For a draft, post mode stops and posts nothing; local mode says it is a draft and asks whether to review it anyway. A draft reviewed on request is named as a draft in the summary.
 - **Existing review comments:** read them before writing your own: the inline ones, review summaries and conversation comments. Do not restate a point a human already made; if you agree and have new evidence, reference theirs instead of duplicating it. `line` is `null` on outdated comments, hence the `original_line` fallback.
 - **CI:** if checks are failing, say which in the summary. Never claim tests pass beyond what `gh pr checks` reported and what step 4b ran.
 
@@ -187,6 +187,7 @@ Anchor a confirmed candidate on the added line that replaced the removed rule, o
 - **Error handling:** swallowed errors, retry storms, missing timeout, user-hostile failures.
 - **Performance:** N+1, unbounded query or loop, index-defeating predicate, large payload, synchronous slow path.
 - **Tests:** changed behavior with no coverage, tests asserting only implementation, missing edge, auth, or failure case.
+- **Half-done work:** trace the change's purpose (step 1b) end to end: entry point, logic, storage, output or UI, tests. A piece the purpose needs that neither the diff nor the base provides is a candidate: a field saved but never shown, a button with no handler, a new enum value no branch handles, a column nothing writes. Count only pieces this repo would hold; work that belongs in another repo or service is not a finding. `major` when the feature cannot work without it; `question` when it may be planned for a later PR. If the PR says it is partial or names the follow-up, it is not a finding.
 - **Refactor redundancy:** old and new paths both live, dead or shadowed code. Broken callers and dropped guards belong to step 4d.
 - **Leftovers:** debug statements (`console.log`, `puts`, `binding.pry`, `debugger`), commented-out code, an import, constant, param, or helper that nothing reads (whether the diff added it unused or orphaned it), `.only` / `fdescribe` / `xit` / skipped specs, a TODO with no ticket, flag scaffolding whose flag is now permanent, a factory or fixture nothing references. Before calling anything unused, grep the whole repo for it, not just the diff: a constant read from a view, a serializer, or a spec looks orphaned in the diff alone. `grep -rlw` is enough; you need the file list, not the lines.
 - **Stale comments:** a code comment the diff adds, or leaves beside changed code, that no longer describes what the code does.

@@ -1,7 +1,7 @@
 {
   "name": "pr-reviewer",
   "description": "Senior-engineer PR review that writes paste-ready, line-anchored comments in plain English, verifies blockers with a second agent, and can post them to GitHub as one review.",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "author": {
     "name": "coderdeep11"
   }

@@ -183,7 +183,7 @@ Anchor a confirmed candidate on the added line that replaced the removed rule, o
 - **Data integrity:** non-atomic writes, partial updates, lost uniqueness, unsafe or irreversible migrations, destructive defaults.
 - **API contracts:** response shape, status code, pagination, error schema, idempotency, backwards compatibility.
 - **Values defined elsewhere:** a filter value, status, enum member, or constant the diff adds or changes. Find where that value is defined (enum, seed data, schema, the other side of an API) and confirm it exists there. A value that exists nowhere matches nothing and raises no error.
-- **Failure modes:** empty input, duplicate or concurrent request, partial outage, flag-off path.
+- **Failure modes:** empty input, duplicate or concurrent request, partial outage, flag-off path, a response that lands after the user moved on (a route param changed and the page did not remount, so an `await` writes into the next record's state).
 - **Error handling:** swallowed errors, retry storms, missing timeout, user-hostile failures.
 - **Performance:** N+1, unbounded query or loop, index-defeating predicate, large payload, synchronous slow path.
 - **Tests:** changed behavior with no coverage, tests asserting only implementation, missing edge, auth, or failure case.

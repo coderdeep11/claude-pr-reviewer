@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Post a review file to its PR as one COMMENT review.
+# Post a review file to its PR as one review.
 #
 #   post-review.sh <comments-file> <pr> <base>...<head>
 #
 # Re-runs check-review.sh, then stops unless the PR's head commit is <head>.
-# Inline blocks become line comments. General blocks become the review body, or
-# the Recommendation line when there are none. Nothing else in the file is posted.
+# Inline blocks become line comments. The review body is the Recommendation line,
+# then any general blocks. Nothing else in the file is posted.
+# "request changes" posts as REQUEST_CHANGES (COMMENT on your own PR); the rest as COMMENT. Never APPROVE.
 # Prints the review URL.
 set -euo pipefail
 
@@ -26,6 +27,17 @@ if [ "$head" != "$pr_head" ]; then
   exit 1
 fi
 
+rec=$(grep -m1 '^\*\*Recommendation:' "$review" || true)
+case "$rec" in
+  "**Recommendation: request changes.**"*) event=REQUEST_CHANGES ;;
+  "**Recommendation: fix or answer the comments.**"* | "**Recommendation: can be approved"*) event=COMMENT ;;
+  *) echo "Recommendation must be request changes, fix or answer the comments, or can be approved: ${rec:-missing}" >&2; exit 1 ;;
+esac
+# GitHub refuses REQUEST_CHANGES from the PR's author.
+if [ "$event" = REQUEST_CHANGES ] && [ "$(gh pr view "$pr" --json author --jq .author.login)" = "$(gh api user --jq .login)" ]; then
+  event=COMMENT
+fi
+
 payload=$(mktemp); trap 'rm -f "$payload"' EXIT
 
 # One record per block, fields split by \001 and records by \002, so jq does the JSON escaping.
@@ -44,20 +56,21 @@ awk '
   /^>/         { line = $0; sub(/^> ?/, "", line); body = body line "\n"; next }
   /^$/         { if (body != "") body = body "\n" }
   END          { flush(); printf "recommendation\001\001\001\001%s\002", rec }
-' "$review" | jq -Rs --arg commit "$head" '
+' "$review" | jq -Rs --arg commit "$head" --arg event "$event" '
   [split("\u0002")[] | select(length > 0) | split("\u0001") | {kind: .[0], path: .[1], lo: .[2], hi: .[3], body: .[4]}] as $blocks
+  | ([$blocks[] | select(.kind == "recommendation") | .body] | first // "") as $rec
   | ([$blocks[] | select(.kind == "general") | .body] | join("\n\n")) as $general
   | {
       commit_id: $commit,
-      event: "COMMENT",
-      body: (if $general != "" then $general else ([$blocks[] | select(.kind == "recommendation") | .body] | first // "") end),
+      event: $event,
+      body: ([$rec, $general] | map(select(. != "")) | join("\n\n")),
       comments: [$blocks[] | select(.kind == "inline")
         | {path, line: (.hi | tonumber), side: "RIGHT", body}
           + (if .lo != .hi then {start_line: (.lo | tonumber), start_side: "RIGHT"} else {} end)]
     }' > "$payload"
 
 if ! jq -e '.body != ""' "$payload" > /dev/null; then
-  echo "no general comment or Recommendation line to use as the review body" >&2
+  echo "no Recommendation line or general comment to use as the review body" >&2
   exit 1
 fi
 

@@ -183,7 +183,7 @@ flowchart LR
 - **Local mode (default):** the steps in "Use it" above. The file stays in `pr-reviews/`, and Claude asks before it posts.
 - **Post mode:** say "post" in the request. Nothing is written into the repo, and the comments go straight to the PR.
 
-Either way, it posts a plain comment review. It never approves or requests changes; that stays a person's call.
+Either way, it posts one review. A blocker or major posts as Request changes; anything else posts as a comment review. It never approves; that stays a person's call.
 
 ### Running it in the cloud
 
@@ -282,7 +282,15 @@ A few rules shape every review:
 | `question` | Missing context that could hide a real issue, or an unconfirmed product decision |
 | `nit` | Small, meaningful improvement; never cosmetic taste |
 
-**Recommendation:** `request changes` if there's a blocker or major, otherwise `approve`. Any minor, question, or nit comments are the author's call.
+**Recommendation:** one of three.
+
+| Recommendation | When | Posted as |
+| --- | --- | --- |
+| `request changes` | At least one blocker or major | Request changes |
+| `fix or answer the comments` | Only minor, question, or nit comments; "Then it can be approved." | Comment review |
+| `can be approved` | No comments | Comment review |
+
+A PR with any comment is never "can be approved", and the skill never approves on GitHub.
 
 A critical security finding (SQL injection, auth bypass, an exposed credential) is verified first, then flagged in chat immediately, not left waiting in the file. A live credential is reported before the rest of the review finishes, because it needs rotating, not just removing from the branch.
 
@@ -293,7 +301,7 @@ A critical security finding (SQL injection, auth bypass, an exposed credential) 
 | Read code, diffs, PR metadata, and the Jira ticket | Commit, push, fetch, check out, reset, or stash |
 | Run the test files the PR adds or changes | Run the full suite or linters unless you ask |
 | Write one comments file (outside the repo in post mode) | Write or edit code or tests |
-| Post one comment review, after you say yes or in post mode | Approve or request changes on your behalf |
+| Post one review, after you say yes or in post mode; Request changes when it finds a blocker or major | Approve a PR on your behalf |
 
 ---
 

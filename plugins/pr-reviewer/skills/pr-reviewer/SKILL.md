@@ -255,7 +255,13 @@ Spot-check two citations from each verifier before acting on it. A finding resti
 
 **A critical security finding is a blocker and an interrupt.** Treat a CRITICAL finding (SQL injection, auth bypass, exposed credential) as stop-and-report, never something to carry on past quietly. In practice: give that one finding its own verifier first, because a false alarm here is expensive, then surface it in chat immediately and at the top of the summary, and write it as `blocker` number 1 in the file. Never let it wait in a file the author might not open until tomorrow. For a live credential in the diff, say so in chat before finishing the rest of the review: rotation is time-sensitive and is not something the author fixes by editing the branch.
 
-Recommend **request changes** if there is a blocker or major; otherwise **approve**, and any minor, question, or nit comments are the author's call.
+The recommendation is one of three, and step 9 posts the review to match it:
+
+- **request changes:** there is at least one blocker or major. It posts as a Request changes review. The line names the fix that is needed.
+- **fix or answer the comments:** there are only minor, question, or nit comments. It posts as a comment review. The line says "Then it can be approved."
+- **can be approved:** there are no comments. It posts as a comment review. If other reviewers' comments are still open on the PR, write "can be approved once <who>'s open comments are answered" instead.
+
+A PR with any comment is never "can be approved". The skill never approves a PR on GitHub; a person does.
 
 ## 6. Write the comments
 
@@ -303,7 +309,7 @@ In local mode, if `pr-reviews/` is not gitignored (`git check-ignore -v pr-revie
 
 **What this PR does:** <one or two sentences; "(inferred)" when step 1b inferred it.>
 
-**Recommendation: <approve | request changes>.** <one line why.>
+**Recommendation: <request changes | fix or answer the comments | can be approved>.** <one line: the fix that is needed; or "Then it can be approved."; or "No comments.">
 
 **Coverage:** read in full: <files>; skimmed: <files>; not opened: <files + why>.
 
@@ -347,9 +353,9 @@ In local mode, if `pr-reviews/` is not gitignored (`git check-ignore -v pr-revie
 
 ## 9. Post
 
-Post only a PR review with at least one comment.
+Post every PR review, including one with no comments: its Recommendation line tells the author the PR can be approved.
 
-- **Local mode:** ask "Post <n> comments to #<pr>?" Use the question tool when one exists. A yes approves this one post; a later run asks again. On no, stop; the file stays.
+- **Local mode:** ask "Post the review (<n> comments, <recommendation>) to #<pr>?" Use the question tool when one exists. A yes approves this one post; a later run asks again. On no, stop; the file stays.
 - **Post mode:** post without asking.
 
 ```bash
@@ -358,7 +364,10 @@ bash ${CLAUDE_SKILL_DIR}/scripts/post-review.sh <comments-file> <pr> <base>...<h
 
 - The script re-runs `check-review.sh`, since the file may have been edited.
 - It stops if the PR's head commit is not `<head>`, because anchors from another commit land on the wrong lines.
-- It posts one `COMMENT` review: `inline` blocks as line comments, `general` blocks as the review body, or the Recommendation line when there is no `general` block. Nothing else in the file is posted.
-- It never approves or requests changes, in either mode. The recommendation stays text in the review; the GitHub decision stays with a person.
+- It stops if the Recommendation line is not one of the three in step 5.
+- It posts one review: `inline` blocks as line comments, and the Recommendation line followed by any `general` blocks as the review body. Nothing else in the file is posted.
+- A `request changes` recommendation posts as a Request changes review, so GitHub shows the PR as changes requested. Every other recommendation posts as a comment review.
+- On a PR the current `gh` user opened, a `request changes` recommendation posts as a comment review instead, because GitHub does not accept Request changes from the PR's author.
+- It never approves a PR, in either mode. A person gives the approval on GitHub.
 
 Report the review URL it prints. If it fails, report its output and do not post by hand.

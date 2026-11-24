@@ -30,7 +30,7 @@ One comments file per run, rewritten each run. Every comment in it is anchored t
 
 ## Command discipline (read-only)
 
-A review reads code; it never mutates it. Do not stage, commit, push, fetch, checkout, reset, stash, or touch tracked files. Do not run mutating `gh` commands, except the step 9 post after the user says yes. Do not clean up untracked files, they are not yours. Run the PR's own test files (step 4b); do not run the full suite or linters unless the user asks, and never write or add tests. The **only** thing you write is the comments file. Every subagent you start gets this rule in its prompt.
+A review reads code; it never mutates it. Do not stage, commit, push, fetch, checkout, reset, stash, or touch tracked files. Do not run mutating `gh` commands, except the step 9 post after the user says yes. Do not clean up untracked files, they are not yours. Run the PR's own test files and the tests that check ticket requirements (step 4b); do not run the full suite or linters unless the user asks, and never write or add tests. The **only** thing you write is the comments file. Every subagent you start gets this rule in its prompt.
 
 Run only commands whose flags you have verified work in this repo. If a ref is missing, say so and ask. Do not `git fetch` to "fix" it without permission.
 
@@ -151,6 +151,8 @@ Build a quick map before judging: entry point or caller, changed code, downstrea
 
 Run every test file the PR adds or changes, and nothing else. Start it in the background as soon as the file list is known, and keep reviewing while it runs.
 
+When step 5 finds that a ticket requirement is checked by a test file the PR did not change, run that file too, so its **Ticket** line has a result.
+
 - Use the repo's documented single-file command (`CLAUDE.md`, `package.json`, README). Follow any repo note about runners that are broken locally or need a special environment.
 - If a runner cannot run locally, do not work around it. Say so under **Tests run**.
 - A failure is a finding only when the same test passes on the base branch, or the test is new. Otherwise record it as preexisting.
@@ -212,7 +214,7 @@ Exposure the PR neither created nor worsened is not this PR's to fix. Put it in 
 
 **Description claims.** List every factual claim in the PR body: what the code does, which queue or config it uses, what it measured, what it does not change. Check each one against the code, citing `file:line`. Record each as true, false, or unverifiable under **Claims checked**. A false claim that changes behavior or deploy is a finding; a false claim that does not is one line in the summary.
 
-**Ticket requirements.** For each requirement from step 1b, find the code that meets it, citing `file:line`. Record each as covered, missing, or contradicted under **Ticket**. A missing or contradicted requirement is a `question`, anchored on the line that decides it or `general`, even though the PR did not cause it: tickets go stale and work gets split across PRs.
+**Ticket requirements.** For each requirement from step 1b, find the code that meets it, citing `file:line`. Record each as covered, missing, or contradicted under **Ticket**. For each covered requirement, also name the test that checks it, citing the test's `file:line`, and its result from step 4b: passed or failed. If no test checks it, write `no test`. Code that exists is not a test result. A `no test` line becomes a comment only under the **Tests** rule above. A missing or contradicted requirement is a `question`, anchored on the line that decides it or `general`, even though the PR did not cause it: tickets go stale and work gets split across PRs.
 
 **Failure scenario.** Write one for every candidate before you judge it: the inputs or state, then the wrong output or crash. It is your evidence and the verifier's brief; it does not go in the comment. If you cannot write one, the candidate is a `question` or nothing.
 
@@ -292,7 +294,7 @@ Mechanical, and cheap. Fix anything that fails before you report done:
 - [ ] Coverage line lists read-in-full vs skimmed vs not-opened, with the reason for anything skipped.
 - [ ] One finding per block; no duplicates of each other or of an existing human comment.
 - [ ] **Claims checked** lists every factual claim in the PR body, each true, false, or unverifiable, with evidence.
-- [ ] **Ticket** lists every ticket requirement, each covered, missing, or contradicted, or says why no ticket was read.
+- [ ] **Ticket** lists every ticket requirement, each covered, missing, or contradicted, or says why no ticket was read. Each covered line names its test and result, or says `no test`.
 - [ ] **Tests run** names each command and its result, or why it could not run.
 - [ ] If a companion PR is named, **Companion PR** states what the contract check found.
 
@@ -319,7 +321,7 @@ In local mode, if `pr-reviews/` is not gitignored (`git check-ignore -v pr-revie
 
 **Claims checked:** <claim: true | false | unverifiable, with file:line. One line each. "No factual claims" if the body has none.>
 
-**Ticket:** <KEY: requirement: covered | missing | contradicted, with file:line. One line each. Or why no ticket was read.>
+**Ticket:** <KEY: requirement: covered | missing | contradicted, with file:line; for a covered one, tested by <test file:line>, passed | failed, or no test. One line each. Or why no ticket was read.>
 
 **Companion PR:** <what the contract check found. Omit this line only when no companion PR is named.>
 

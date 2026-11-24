@@ -215,7 +215,7 @@ A cloud run has no one to answer questions. If the review needs to ask something
 
 **Claims checked:** "export only includes the current account's invoices": false, app/controllers/invoices_controller.rb:42 queries `Invoice.where(id: params[:ids])`.
 
-**Ticket:** BILL-214: export filtered invoices as CSV: covered, app/services/invoice_csv.rb:8.
+**Ticket:** BILL-214: export filtered invoices as CSV: covered, app/services/invoice_csv.rb:8; tested by spec/requests/invoices_spec.rb:14, passed.
 
 ---
 
@@ -266,7 +266,7 @@ A few rules shape every review:
 - **Certain, or it's a question.** If the evidence doesn't fully support a bug, it becomes a `question` or is dropped.
 - **Coverage before signal.** Every substantial file is opened before the PR is judged. Large PRs are read in risk order (auth, migrations, money, shared services, public API), and the coverage line says what was skipped.
 - **The repo decides taste.** Conventions come from your `CLAUDE.md`, `CONTRIBUTING.md`, linter configs, and PR template, not from the model's preferences.
-- **Checks what the PR claims.** Every factual claim in the PR body, and every requirement in the linked ticket, is marked true, false, or unverifiable with a `file:line`.
+- **Checks what the PR claims.** Every factual claim in the PR body, and every requirement in the linked ticket, is marked true, false, or unverifiable with a `file:line`. Each covered requirement also names the test that checks it, and whether that test passed.
 - **Looks past the added lines.** It checks what the diff removed (guards, validations, tenant filters, transactions) and greps for callers the change could break.
 - **Checks what the diff points at.** A new filter value or enum member must exist where it's defined. A comment must still match the code next to it. A new dependency must not do the same job as one already installed.
 - **Spots half-done work.** It follows the change end to end, from entry point to UI and tests. A missing piece in this repo is a `major` if the feature can't work without it, or a `question` if it may be planned for a later PR.

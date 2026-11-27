@@ -1,6 +1,7 @@
 ---
 name: pr-reviewer
 description: Use when reviewing a pull request, merge request, PR branch, branch diff, commit range, or changes against a base branch for actionable code review comments, or when posting those comments to the PR
+effort: xhigh
 ---
 
 # PR Reviewer
